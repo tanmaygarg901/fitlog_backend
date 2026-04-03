@@ -3,7 +3,7 @@ from datetime import date
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.db.supabase_client import supabase
+from app.db.supabase_client import supabase, _ensure_supabase_client as _ensure_db_client
 from app.models.schemas import MealEntry, ParseRequest, ParseResponse, WorkoutEntry
 from app.services.llm_parser import parse_log_entry
 from app.utils.normalization import normalize_exercise_name
@@ -27,8 +27,9 @@ class ConfirmWorkoutRequest(BaseModel):
 
 
 def _ensure_supabase_client() -> None:
+    global supabase
     if supabase is None:
-        raise RuntimeError("Supabase client is not initialized.")
+        supabase = _ensure_db_client()
 
 
 def _ensure_insert_data(response, table_name: str) -> list[dict]:

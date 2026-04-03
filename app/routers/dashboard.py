@@ -3,7 +3,7 @@ import math
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.db.supabase_client import supabase
+from app.db.supabase_client import supabase, _ensure_supabase_client as _ensure_db_client
 from app.services.correlation import compute_weekly_correlations
 from app.utils.dates import zero_fill_days
 from app.utils.normalization import normalize_exercise_name
@@ -19,8 +19,9 @@ DEFAULT_GOALS = {
 
 
 def _ensure_supabase_client() -> None:
+    global supabase
     if supabase is None:
-        raise RuntimeError("Supabase client is not initialized.")
+        supabase = _ensure_db_client()
 
 
 def _date_from_timestamp(value: str | None) -> str:

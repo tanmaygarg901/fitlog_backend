@@ -4,15 +4,16 @@ import os
 from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.db.supabase_client import supabase
+from app.db.supabase_client import supabase, _ensure_supabase_client as _ensure_db_client
 from app.routers import dashboard, parse, reports
 
 app = FastAPI(title="FitLog AI API")
 
 
 def _ensure_supabase_client() -> None:
+    global supabase
     if supabase is None:
-        raise RuntimeError("Supabase client is not initialized.")
+        supabase = _ensure_db_client()
 
 # Allow overriding CORS origins via env (comma-separated). Fallback to sensible dev defaults.
 _cors_env = os.getenv("CORS_ORIGINS", "").strip()

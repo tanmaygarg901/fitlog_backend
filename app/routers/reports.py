@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from app.db.supabase_client import supabase
+from app.db.supabase_client import supabase, _ensure_supabase_client as _ensure_db_client
 from app.services.correlation import compute_weekly_correlations, generate_weekly_report
 
 router = APIRouter(tags=["reports"])
@@ -14,8 +14,9 @@ class GenerateReportRequest(BaseModel):
 
 
 def _ensure_supabase_client() -> None:
+    global supabase
     if supabase is None:
-        raise RuntimeError("Supabase client is not initialized.")
+        supabase = _ensure_db_client()
 
 
 def _last_monday_iso() -> str:

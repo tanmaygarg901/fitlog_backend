@@ -40,6 +40,9 @@ supabase = _load_supabase_client()
 
 
 def _ensure_supabase_client() -> Client:
+    global supabase
+    if supabase is None:
+        supabase = _load_supabase_client()
     if supabase is None:
         raise RuntimeError("Supabase client is not initialized.")
     return supabase
