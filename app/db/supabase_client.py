@@ -6,18 +6,34 @@ from supabase import Client, create_client
 supabase: Optional[Client] = None
 
 
+def _sanitize_env_value(raw_value: str | None, expected_key: str) -> str:
+    value = str(raw_value or "").strip()
+    if not value:
+        return ""
+
+    if value.startswith(("'", '"')) and value.endswith(("'", '"')) and len(value) >= 2:
+        value = value[1:-1].strip()
+
+    prefix = f"{expected_key}="
+    if value.startswith(prefix):
+        value = value[len(prefix) :].strip()
+
+    return value
+
+
 def _load_supabase_client() -> Optional[Client]:
     """Initialize Supabase client using flexible env var names.
 
     Priority for URL: SUPABASE_URL, NEXT_PUBLIC_SUPABASE_URL
     Priority for KEY: SUPABASE_SERVICE_ROLE_KEY, SUPABASE_KEY, SUPABASE_ANON_KEY, NEXT_PUBLIC_SUPABASE_ANON_KEY
     """
-    url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
-    key = (
+    url = _sanitize_env_value(os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL"), "SUPABASE_URL")
+    key = _sanitize_env_value(
         os.getenv("SUPABASE_SERVICE_ROLE_KEY")
         or os.getenv("SUPABASE_KEY")
         or os.getenv("SUPABASE_ANON_KEY")
-        or os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
+        or os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+        "SUPABASE_SERVICE_ROLE_KEY",
     )
 
     if not url or not key:
@@ -44,7 +60,9 @@ def _ensure_supabase_client() -> Client:
     if supabase is None:
         supabase = _load_supabase_client()
     if supabase is None:
-        raise RuntimeError("Supabase client is not initialized.")
+        raise RuntimeError(
+            "Supabase client is not initialized. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in runtime environment."
+        )
     return supabase
 
 
