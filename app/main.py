@@ -1,4 +1,5 @@
 from datetime import date
+import os
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,16 +14,17 @@ def _ensure_supabase_client() -> None:
     if supabase is None:
         raise RuntimeError("Supabase client is not initialized.")
 
+# Allow overriding CORS origins via env (comma-separated). Fallback to sensible dev defaults.
+_cors_env = os.getenv("CORS_ORIGINS", "").strip()
+_cors_from_env = [o.strip() for o in _cors_env.split(",") if o.strip()]
+_default_cors = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "https://your-lovable-frontend-url.com",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://bd74-128-195-95-45.ngrok-free.app",
-        "https://id-preview--4460feb8-1185-470f-b647-bd6f9c78ac8f.lovable.app",
-        "https://4460feb8-1185-470f-b647-bd6f9c78ac8f.lovableproject.com",
-        "https://your-lovable-frontend-url.com",
-    ],
+    allow_origins=_cors_from_env or _default_cors,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -45,6 +47,23 @@ async def root():
 @app.get("/health", tags=["meta"])
 async def health_check():
     return {"status": "ok", "service": "fitlog-api"}
+
+
+@app.get("/health/db", tags=["meta"])
+async def health_db():
+    try:
+        _ensure_supabase_client()
+    except Exception as exc:
+        return {"db_ok": False, "error": str(exc)}
+
+    try:
+        resp = supabase.table("logs").select("id").limit(1).execute()
+        err = getattr(resp, "error", None)
+        if err:
+            return {"db_ok": False, "error": str(err)}
+        return {"db_ok": True}
+    except Exception as exc:
+        return {"db_ok": False, "error": str(exc)}
 
 
 @app.get("/api/summary/today", tags=["summary"])

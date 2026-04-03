@@ -5,17 +5,38 @@ from supabase import Client, create_client
 
 supabase: Optional[Client] = None
 
-try:
-    supabase_url = os.environ["SUPABASE_URL"]
-    supabase_service_role_key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
-    supabase = create_client(supabase_url, supabase_service_role_key)
-except KeyError as missing:
-    print(
-        "[Supabase] Missing required environment variable:",
-        str(missing),
+
+def _load_supabase_client() -> Optional[Client]:
+    """Initialize Supabase client using flexible env var names.
+
+    Priority for URL: SUPABASE_URL, NEXT_PUBLIC_SUPABASE_URL
+    Priority for KEY: SUPABASE_SERVICE_ROLE_KEY, SUPABASE_KEY, SUPABASE_ANON_KEY, NEXT_PUBLIC_SUPABASE_ANON_KEY
+    """
+    url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+    key = (
+        os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        or os.getenv("SUPABASE_KEY")
+        or os.getenv("SUPABASE_ANON_KEY")
+        or os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY")
     )
-except Exception as exc:  # pragma: no cover - defensive logging
-    print("[Supabase] Failed to initialize client:", exc)
+
+    if not url or not key:
+        missing = []
+        if not url:
+            missing.append("SUPABASE_URL")
+        if not key:
+            missing.append("SUPABASE_SERVICE_ROLE_KEY|SUPABASE_KEY|SUPABASE_ANON_KEY")
+        print("[Supabase] Missing required environment variable(s):", ", ".join(missing))
+        return None
+
+    try:
+        return create_client(url, key)
+    except Exception as exc:  # pragma: no cover - defensive logging
+        print("[Supabase] Failed to initialize client:", exc)
+        return None
+
+
+supabase = _load_supabase_client()
 
 
 def _ensure_supabase_client() -> Client:
