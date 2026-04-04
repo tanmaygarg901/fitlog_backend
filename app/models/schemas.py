@@ -6,6 +6,7 @@ from pydantic import BaseModel
 class ParseRequest(BaseModel):
     raw_text: str
     user_id: str
+    log_date: str | None = None
 
 
 class FoodItem(BaseModel):

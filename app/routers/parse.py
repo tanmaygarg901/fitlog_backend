@@ -1,4 +1,5 @@
-from datetime import date
+from datetime import date, datetime, timedelta
+import re
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -42,6 +43,54 @@ def _ensure_insert_data(response, table_name: str) -> list[dict]:
         raise RuntimeError(f"Supabase insert returned no data for {table_name}.")
 
     return data
+
+
+def _resolve_log_date(raw_text: str, explicit_log_date: str | None) -> str:
+    today = date.today()
+    raw = str(raw_text or "")
+
+    if explicit_log_date:
+        cleaned = str(explicit_log_date).strip()
+        try:
+            return date.fromisoformat(cleaned).isoformat()
+        except ValueError:
+            try:
+                return datetime.strptime(cleaned, "%m/%d/%Y").date().isoformat()
+            except ValueError:
+                pass
+
+    lowered = raw.lower()
+    if "yesterday" in lowered:
+        return (today - timedelta(days=1)).isoformat()
+    if "today" in lowered:
+        return today.isoformat()
+
+    month_match = re.search(
+        r"\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(\d{4}))?\b",
+        lowered,
+    )
+    if month_match:
+        month_name, day_str, year_str = month_match.groups()
+        try:
+            month = datetime.strptime(month_name, "%B").month
+            day = int(day_str)
+            year = int(year_str) if year_str else today.year
+            return date(year, month, day).isoformat()
+        except ValueError:
+            pass
+
+    numeric_match = re.search(r"\b(\d{1,2})/(\d{1,2})/(\d{2,4})\b", lowered)
+    if numeric_match:
+        month_str, day_str, year_str = numeric_match.groups()
+        year = int(year_str)
+        if year < 100:
+            year += 2000
+        try:
+            return date(year, int(month_str), int(day_str)).isoformat()
+        except ValueError:
+            pass
+
+    return today.isoformat()
 
 
 def _safe_float(value: object) -> float:
@@ -211,16 +260,17 @@ def upsert_daily_summary(
     entry_type: str,
     meal: MealEntry | None,
     workout: WorkoutEntry | None,
+    summary_date: str | None = None,
 ) -> None:
     _ensure_supabase_client()
 
-    today = date.today().isoformat()
+    target_date = summary_date or date.today().isoformat()
 
     existing_resp = (
         supabase.table("daily_summaries")
         .select("*")
         .eq("user_id", user_id)
-        .eq("date", today)
+        .eq("date", target_date)
         .limit(1)
         .execute()
     )
@@ -265,7 +315,7 @@ def upsert_daily_summary(
 
     insert_payload = {
         "user_id": user_id,
-        "date": today,
+        "date": target_date,
         "total_calories": meal_delta_cal,
         "total_protein_g": meal_delta_pro,
         "total_carbs_g": meal_delta_carbs,
@@ -282,6 +332,7 @@ def upsert_daily_summary(
 async def parse_entry(request: ParseRequest) -> ParseResponse:
     try:
         _ensure_supabase_client()
+        effective_log_date = _resolve_log_date(request.raw_text, request.log_date)
 
         parsed = await parse_log_entry(request.raw_text, user_id=request.user_id)
 
@@ -382,7 +433,13 @@ async def parse_entry(request: ParseRequest) -> ParseResponse:
 
             upsert_workout_template(request.user_id, parsed.workout)
 
-        upsert_daily_summary(request.user_id, parsed.entry_type, parsed.meal, parsed.workout)
+        upsert_daily_summary(
+            request.user_id,
+            parsed.entry_type,
+            parsed.meal,
+            parsed.workout,
+            summary_date=effective_log_date,
+        )
 
         return parsed
     except HTTPException:
