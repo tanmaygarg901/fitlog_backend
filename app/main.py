@@ -18,6 +18,7 @@ def _ensure_supabase_client() -> None:
 # Allow overriding CORS origins via env (comma-separated). Fallback to sensible dev defaults.
 _cors_env = os.getenv("CORS_ORIGINS", "").strip()
 _cors_from_env = [o.strip() for o in _cors_env.split(",") if o.strip()]
+_cors_origin_regex = os.getenv("CORS_ORIGIN_REGEX", "").strip()
 _default_cors = [
     "http://localhost:3000",
     "http://localhost:5173",
@@ -26,6 +27,7 @@ _default_cors = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_from_env or _default_cors,
+    allow_origin_regex=_cors_origin_regex or None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
