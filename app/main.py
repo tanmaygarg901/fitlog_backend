@@ -15,19 +15,44 @@ def _ensure_supabase_client() -> None:
     if supabase is None:
         supabase = _ensure_db_client()
 
+
+def _sanitize_env(raw: str) -> str:
+    value = str(raw or "").strip()
+    if value.startswith(("'", '"')) and value.endswith(("'", '"')) and len(value) >= 2:
+        value = value[1:-1].strip()
+    return value
+
 # Allow overriding CORS origins via env (comma-separated). Fallback to sensible dev defaults.
-_cors_env = os.getenv("CORS_ORIGINS", "").strip()
+# Supports common variable variants to avoid deployment misconfiguration.
+_cors_env = _sanitize_env(
+    os.getenv("CORS_ORIGINS")
+    or os.getenv("CORS_ORIGIN")
+    or os.getenv("cors_origins")
+    or os.getenv("cors_origin")
+    or ""
+)
 _cors_from_env = [o.strip() for o in _cors_env.split(",") if o.strip()]
-_cors_origin_regex = os.getenv("CORS_ORIGIN_REGEX", "").strip()
-_default_cors = [
+_cors_origin_regex = _sanitize_env(
+    os.getenv("CORS_ORIGIN_REGEX")
+    or os.getenv("CORS_REGEX")
+    or os.getenv("cors_origin_regex")
+    or os.getenv("cors_regex")
+    or ""
+)
+if "\\\\" in _cors_origin_regex:
+    _cors_origin_regex = _cors_origin_regex.replace("\\\\", "\\")
+_default_cors_origin_regex = r"^https://([a-z0-9-]+\.)?(lovable\.app|lovableproject\.com)$|^http://localhost:(3000|5173)$"
+_explicit_cors_fallback = [
+    "https://4460feb8-1185-470f-b647-bd6f9c78ac8f.lovableproject.com",
+    "https://id-preview--4460feb8-1185-470f-b647-bd6f9c78ac8f.lovable.app",
     "http://localhost:3000",
     "http://localhost:5173",
-    "https://your-lovable-frontend-url.com",
 ]
+_cors_allow_origins = list(dict.fromkeys((_cors_from_env or []) + _explicit_cors_fallback))
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_cors_from_env or _default_cors,
-    allow_origin_regex=_cors_origin_regex or None,
+    allow_origins=_cors_allow_origins,
+    allow_origin_regex=_cors_origin_regex or _default_cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
